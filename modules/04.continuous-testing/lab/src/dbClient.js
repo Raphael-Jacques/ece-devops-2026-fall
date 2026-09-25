@@ -1,26 +1,24 @@
-var redis = require("redis");
+const redis = require('redis')
 const configure = require('./configure')
 
 const config = configure()
+
+// En production (Render), on utilise REDIS_URL (Upstash, en rediss://)
+// En local et dans la CI, on utilise la config classique (localhost:6379)
 const db = process.env.REDIS_URL
-  ? redis.createClient({
-      url: process.env.REDIS_URL
+  ? redis.createClient(process.env.REDIS_URL, {
+      tls: { rejectUnauthorized: false }
     })
   : redis.createClient({
-      url: `redis://${config.redis.host}:${config.redis.port}`
-    });
-
-db.on("error", (err) => console.error("Redis error :", err));
-
-if (typeof db.connect === 'function') {
-  db.connect().catch(console.error);
-}
+      host: config.redis.host,
+      port: config.redis.port,
+      retry_strategy: () => {
+        return new Error('Retry time exhausted')
+      }
+    })
 
 process.on('SIGINT', function () {
-  db.quit(() => {
-      console.log("\nRedis disconnected. Server stopped.");
-      process.exit(0);
-    });
-});
+  db.quit()
+})
 
 module.exports = db
